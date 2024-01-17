@@ -1,49 +1,63 @@
+// Source code is decompiled from a .class file using FernFlower decompiler.
 package com.atlassian.confluence.impl.webapp;
 
-import com.atlassian.confluence.impl.webapp.ServletRegistrar;
 import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
+import java.util.Iterator;
 import java.util.Map;
+import javax.annotation.Nullable;
 import javax.servlet.Servlet;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRegistration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/* loaded from: ServletRegistrar$Builder.class */
-class ServletRegistrar$Builder {
-    private String servletName;
-    private Class<? extends Servlet> servletClass;
-    private final Map<String, String> initParams = new LinkedHashMap();
-    private final Collection<ServletRegistrar.ServletMapping> mappings = new LinkedList();
-    private Integer loadOnStartup;
+final class ServletRegistrar implements ServletContextRegistrar {
+   private static final Logger log = LoggerFactory.getLogger(ServletRegistrar.class);
+   private final Class<? extends Servlet> servletClass;
+   private final String servletName;
+   private final Integer loadOnStartup;
+   private final Map<String, String> initParams;
+   private final Collection<ServletMapping> mappings;
 
-    ServletRegistrar$Builder() {
-    }
+   private ServletRegistrar(Class<? extends Servlet> servletClass, String servletName, @Nullable Integer loadOnStartup, Map<String, String> initParams, Collection<ServletMapping> mappings) {
+      this.servletClass = servletClass;
+      this.servletName = servletName;
+      this.loadOnStartup = loadOnStartup;
+      this.initParams = initParams;
+      this.mappings = mappings;
+   }
 
-    public ServletRegistrar$Builder mapping(UrlPattern... urlPatterns) {
-        this.mappings.add(new ServletRegistrar.ServletMapping(new UrlPatterns(urlPatterns)));
-        return this;
-    }
+   public void register(ServletContext servletContext) throws ServletException {
+      ServletRegistration.Dynamic registration = servletContext.addServlet(this.servletName, this.servletClass);
+      if (registration == null) {
+         throw new ServletException("ServletContext already contains a complete registration for " + this.servletName);
+      } else {
+         log.debug("Registering '{}' with init-params {}", this.servletName, this.initParams);
+         registration.setInitParameters(this.initParams);
+         if (this.loadOnStartup != null) {
+            registration.setLoadOnStartup(this.loadOnStartup);
+         }
 
-    public ServletRegistrar build() {
-        return new ServletRegistrar(this.servletClass, this.servletName, this.loadOnStartup, this.initParams, this.mappings);
-    }
+         Iterator var3 = this.mappings.iterator();
 
-    public ServletRegistrar$Builder servletClass(Class<? extends Servlet> servletClass) {
-        this.servletClass = servletClass;
-        return this;
-    }
+         while(var3.hasNext()) {
+            ServletMapping mapping = (ServletMapping)var3.next();
+            mapping.addTo(registration, this.servletName);
+         }
 
-    public ServletRegistrar$Builder initParam(String name, String value) {
-        this.initParams.put(name, value);
-        return this;
-    }
+      }
+   }
 
-    public ServletRegistrar$Builder servletName(String servletName) {
-        this.servletName = servletName;
-        return this;
-    }
+   static Builder servlet(String servletName, Class<? extends Servlet> servletClass) {
+      return (new Builder()).servletName(servletName).servletClass(servletClass);
+   }
 
-    public ServletRegistrar$Builder loadOnStartup(int loadOnStartup) {
-        this.loadOnStartup = Integer.valueOf(loadOnStartup);
-        return this;
-    }
+   static Builder servlet(String servletName, String servletClassName) {
+      try {
+         return servlet(servletName, Class.forName(servletClassName));
+      } catch (ClassNotFoundException var3) {
+         throw new RuntimeException(var3);
+      }
+   }
 }

@@ -1,3 +1,4 @@
+// Source code is decompiled from a .class file using FernFlower decompiler.
 package com.atlassian.confluence.impl.webapp.sudo;
 
 import com.atlassian.annotations.nullability.ParametersAreNonnullByDefault;
@@ -24,38 +25,37 @@ import org.slf4j.LoggerFactory;
 
 @ParametersAreNonnullByDefault
 @ReturnValuesAreNonnullByDefault
-/* loaded from: WebSudoFilter.class */
 public final class WebSudoFilter extends HttpFilter {
-    private static final Logger log = LoggerFactory.getLogger(WebSudoFilter.class);
-    private final transient Supplier<WebSudoManager> webSudoManagerRef = new LazyComponentReference("webSudoManager");
-    private final transient Supplier<ClassLoader> classLoaderRef = new LazyComponentReference("uberClassLoader");
-    private final transient Supplier<PermissionManager> permissionManagerRef = new LazyComponentReference("permissionManager");
-    private final transient Supplier<SpaceManagerInternal> spaceManagerRef = new LazyComponentReference("spaceManager");
-    private boolean isSetupComplete = false;
+   private static final Logger log = LoggerFactory.getLogger(WebSudoFilter.class);
+   private final transient ParameterEnforcer parameterEnforcer = new ParameterEnforcer();
+   private final transient Supplier<WebSudoManager> webSudoManagerRef = new LazyComponentReference("webSudoManager");
+   private final transient Supplier<ClassLoader> classLoaderRef = new LazyComponentReference("uberClassLoader");
+   private final transient Supplier<PermissionManager> permissionManagerRef = new LazyComponentReference("permissionManager");
+   private final transient Supplier<SpaceManagerInternal> spaceManagerRef = new LazyComponentReference("spaceManager");
+   private final transient java.util.function.Supplier<Boolean> isSetupComplete = new BooleanFuse(false, () -> {
+      return !ConfluenceSystemProperties.isDevMode() && ContainerManager.isContainerSetup() && GeneralUtil.isSetupComplete();
+   });
 
-    public void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
-        if (!isSetupComplete()) {
-            log.debug("Skipping websudo check; dev mode or setup incomplete");
-            chain.doFilter(request, response);
-            return;
-        }
-        URI redirectUri = createEnforcer().enforceWebSudo(request, response);
-        if (redirectUri != null) {
+   public WebSudoFilter() {
+   }
+
+   public void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
+      if (this.parameterEnforcer.enforce(request)) {
+         response.sendError(400);
+      } else if (!(Boolean)this.isSetupComplete.get()) {
+         log.debug("Skipping websudo check; dev mode or setup incomplete");
+         chain.doFilter(request, response);
+      } else {
+         URI redirectUri = this.createEnforcer().enforceWebSudo(request, response);
+         if (redirectUri != null) {
             response.sendRedirect(redirectUri.toString());
-        } else {
+         } else {
             chain.doFilter(request, response);
-        }
-    }
+         }
+      }
+   }
 
-    WebSudoEnforcer createEnforcer() {
-        return new WebSudoEnforcer((WebSudoManager) this.webSudoManagerRef.get(), (ClassLoader) this.classLoaderRef.get(), (PermissionManager) this.permissionManagerRef.get(), (Dispatcher) BootstrapUtils.getBootstrapContext().getBean("strutsDispatcher", Dispatcher.class), (SpaceManagerInternal) this.spaceManagerRef.get());
-    }
-
-    private boolean isSetupComplete() {
-        if (this.isSetupComplete) {
-            return true;
-        }
-        this.isSetupComplete = !ConfluenceSystemProperties.isDevMode() && ContainerManager.isContainerSetup() && GeneralUtil.isSetupComplete();
-        return this.isSetupComplete;
-    }
+   WebSudoEnforcer createEnforcer() {
+      return new WebSudoEnforcer((WebSudoManager)this.webSudoManagerRef.get(), (ClassLoader)this.classLoaderRef.get(), (PermissionManager)this.permissionManagerRef.get(), (Dispatcher)BootstrapUtils.getBootstrapContext().getBean("strutsDispatcher", Dispatcher.class), (SpaceManagerInternal)this.spaceManagerRef.get());
+   }
 }
